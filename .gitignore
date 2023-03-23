@@ -6,6 +6,7 @@ __pycache__
 
 ##Database
 instance
+database.db
 
 ##Visual Studio Code Files
 .vscode
