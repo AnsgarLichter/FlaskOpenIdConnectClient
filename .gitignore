@@ -1,0 +1,11 @@
+##Ignore Python Cache
+__pycache__
+
+##Ignore Environment's Secrets
+.env
+
+##Database
+instance
+
+##Visual Studio Code Files
+.vscode
