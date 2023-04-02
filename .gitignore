@@ -10,3 +10,6 @@ database.db
 
 ##Visual Studio Code Files
 .vscode
+
+#Token Templates because of personal information
+tokens
