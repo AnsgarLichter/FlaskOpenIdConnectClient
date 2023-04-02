@@ -156,8 +156,33 @@ def authorize_gitlab():
     login_user(user)
     return redirect(url_for("views.protected"))
 
+# TODO: Move all login links to login page & only login in called funtions
+# TODO: Add possibilities on signup page to sign up with oidc providers
+# TODO: Add configuration possibilities for needed user parameters
+# TODO: Add possibility to connect multiple services to 1 account?
+@blueprint.route("/login/oidc/<provider>")
+def login_oidc(provider):
+    redirect_url = url_for("views.authorize_oidc",
+                           _external=True, provider=provider)
+
+    return oauth.create_client(provider).authorize_redirect(redirect_url)
 
 
+@blueprint.route("/login/oidc/<provider>")
+def authorize_oidc(provider):
+    token = oauth.gitlab.authorize_access_token()
+    print(f"\nToken: {token}\n")
+
+    user_info = token['userinfo']
+    user = User.query.filter_by(id=user_info.sub).first()
+    if not user:
+        user_name = f"{user_info.given_name}{user_info.family_name}" #TODO: Doesn't work for all providers
+        user = User(id=user_info.sub, username=user_name, type=provider)
+        db.session.add(user)
+        db.session.commit()
+
+    login_user(user)
+    return redirect(url_for("views.protected"))
 
 
 @blueprint.route("/protected")
