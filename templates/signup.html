@@ -15,7 +15,21 @@
         {{ form.submit }}
     </form>
 
-    Already have an account=? <a href="{{url_for('login')}}">Login</a>
+    <br />
+
+    <button><a href="{{url_for('views.signup_oidc', provider='google')}}">Signup using Google</a></button>
+
+    <button><a href="{{url_for('views.signup_oidc', provider='microsoft')}}">Signup using Microsoft (works only if
+            accessed via
+            localhost)</a></button>
+
+    <button><a href="{{url_for('views.signup_oidc', provider='orcid')}}">Signup using ORCID</a></button>
+
+    <button><a href="{{url_for('views.signup_oidc', provider='gitlab')}}">Signup using Gitlab</a></button>
+
+    <br />
+
+    Already have an account? <a href="{{url_for('views.login')}}">Login</a>
 </body>
 
 </html>

@@ -14,6 +14,15 @@
         {{ form.password }}
         {{ form.submit }}
     </form>
+
+    <br />
+
+    <button><a href="{{url_for('views.login_oidc', provider='google')}}">Login using Google</a></button>
+    <button><a href="{{url_for('views.login_oidc', provider='microsoft')}}">Login using Microsoft (works only if
+            accessed via
+            localhost)</a></button>
+    <button><a href="{{url_for('views.login_oidc', provider='orcid')}}">Login using ORCID</a></button>
+    <button><a href="{{url_for('views.login_oidc', provider='gitlab')}}">Login using Gitlab</a></button>
 </body>
 
 </html>
