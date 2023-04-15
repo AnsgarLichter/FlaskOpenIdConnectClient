@@ -3,4 +3,4 @@ from app import app
 
 
 
-bcrypt = Bcrypt(app)
+flask_bcrypt = Bcrypt(app)

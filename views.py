@@ -5,53 +5,54 @@ from flask_login import login_required, login_user, logout_user, current_user
 
 from database import db
 from oauth import oauth
-from bcrypt import bcrypt
+from hash import flask_bcrypt
 
 from forms.login_form import LoginForm
 from forms.sign_up_form import SignUpForm
 
-from models.user import User
+from models.user import User, LocalUser
 
 blueprint = Blueprint('views', __name__)
 
+#TODO: Add UI to delete connection to a provider
+#TODO: Add possibility to connect multiple providers to 1 account - how to filter connected vs disconnected providers without a plugin config?
+#TODO: Add configuration possibilities for needed user parameters
 
 @blueprint.route("/")
 def welcome():
     return render_template("main.html")
 
-
 @blueprint.route("/signup", methods=["GET", "POST"])
 def signup():
     form = SignUpForm()
 
-    if form.validate_on_submit():
-        hashed_password = bcrypt.generate_password_hash(form.password.data)
-        new_user = User(username=form.username.data,
-                        password=hashed_password, type="local")
+    if not form.validate_on_submit():
+        return render_template("signup.html", form=form)
+    
+    User.create_local_user(
+        username=form.username.data,
+        password=form.password.data
+    )
+    db.session.commit()
 
-        db.session.add(new_user)
-        db.session.commit()
-
-        return redirect(url_for("views.login"))
-
-    return render_template("signup.html", form=form)
-
+    return redirect(url_for("views.login"))
 
 @blueprint.route("/login", methods=["GET", "POST"])
 def login():
     form = LoginForm()
 
-    if form.validate_on_submit():
-        user = User.query.filter_by(
-            username=form.username.data, type="local").first()
-        if user:
-            if bcrypt.check_password_hash(user.password, form.password.data):
-                login_user(user)
+    if not form.validate_on_submit():
+        return render_template("login.html", form=form)
 
-                return redirect(url_for("views.protected"))
+    local_user = LocalUser.query.join(LocalUser.user).filter_by(
+        username=form.username.data,
+    ).first()
 
-    return render_template("login.html", form=form)
-
+    if not local_user or not flask_bcrypt.check_password_hash(local_user.password, form.password.data):
+        return render_template("login.html", form=form)
+    
+    login_user(local_user.user)
+    return redirect(url_for("views.protected"))
 
 @blueprint.route("/logout", methods=["GET", "POST"])
 def logout():
@@ -59,107 +60,12 @@ def logout():
 
     return redirect(url_for("views.welcome"))
 
+@blueprint.route("/delete", methods=["POST"])
+def delete_account():
+    db.session.delete(current_user)
+    db.session.commit()
 
-@blueprint.route("/login/google1")
-def login_google():
-    redirect_url = url_for("views.authorize_google", _external=True)
-
-    return oauth.google.authorize_redirect(redirect_url)
-
-
-@blueprint.route("/login/google/authorize1")
-def authorize_google():
-    token = oauth.google.authorize_access_token()
-    print(f"\nToken: {token}\n")
-
-    user_info = token['userinfo']
-    user = User.query.filter_by(id=user_info.sub).first()
-    if not user:
-        user_name = f"{user_info.given_name}{user_info.family_name}"
-        user = User(id=user_info.sub, username=user_name, type='google')
-        db.session.add(user)
-        db.session.commit()
-
-    login_user(user)
-    return redirect(url_for("views.protected"))
-
-
-@blueprint.route("/login/microsoft1")
-def login_microsoft():
-    redirect_url = url_for("views.authorize_microsoft", _external=True)
-
-    return oauth.microsoft.authorize_redirect(redirect_url)
-
-
-@blueprint.route("/login/microsoft/authorize1")
-def authorize_microsoft():
-    token = oauth.microsoft.authorize_access_token()
-    print(f"\nToken: {token}\n")
-
-    user_info = token['userinfo']
-    user = User.query.filter_by(id=user_info.sub).first()
-    if not user:
-        user_name = {user_info.name}  # TODO: Make customizable
-        user = User(id=user_info.sub, username=user_name, type='microsoft')
-        db.session.add(user)
-        db.session.commit()
-
-    login_user(user)
-    return redirect(url_for("views.protected"))
-
-
-@blueprint.route("/login/orcid1")
-def login_orcid():
-    redirect_url = url_for("views.authorize_orcid", _external=True)
-
-    return oauth.orcid.authorize_redirect(redirect_url)
-
-
-@blueprint.route("/login/orcid/authorize1")
-def authorize_orcid():
-    token = oauth.orcid.authorize_access_token()
-
-    print(f"\nToken: {token}\n")
-
-    user_info = token['userinfo']
-    user = User.query.filter_by(id=user_info.sub).first()
-    if not user:
-        user_name = f"{user_info.given_name}{user_info.family_name}"
-        user = User(id=user_info.sub, username=user_name, type='orcid')
-        db.session.add(user)
-        db.session.commit()
-
-    login_user(user)
-    return redirect(url_for("views.protected"))
-
-
-@blueprint.route("/login/gitlab1")
-def login_gitlab():
-    redirect_url = url_for("views.authorize_gitlab", _external=True)
-
-    return oauth.gitlab.authorize_redirect(redirect_url)
-
-
-@blueprint.route("/login/gitlab/authorize1")
-def authorize_gitlab():
-    token = oauth.gitlab.authorize_access_token()
-    print(f"\nToken: {token}\n")
-
-    user_info = token['userinfo']
-    user = User.query.filter_by(id=user_info.sub).first()
-    if not user:
-        user_name = f"{user_info.given_name}{user_info.family_name}"
-        user = User(id=user_info.sub, username=user_name, type='gitlab')
-        db.session.add(user)
-        db.session.commit()
-
-    login_user(user)
-    return redirect(url_for("views.protected"))
-
-# TODO: Add possibilities on signup page to sign up with oidc providers
-# TODO: Add configuration possibilities for needed user parameters
-# TODO: Add possibility to connect multiple services to 1 account?
-
+    return redirect(url_for("views.welcome"))
 
 @blueprint.route("/signup/<provider>")
 def signup_oidc(provider):
@@ -182,7 +88,7 @@ def authorize_signup_oidc(provider):
     print(f"{token}")
 
     user_info = token['userinfo']
-    user = User.query.filter_by(id=user_info.sub).first()
+    user = User.query.join(User.connected_providers).filter_by(sub=user_info.sub).first()
     if user:
         return redirect(url_for("views.login_oidc", provider=provider))
 
@@ -194,8 +100,7 @@ def authorize_signup_oidc(provider):
     elif provider == 'gitlab': # user_info.name does work but is already used in the test example
         user_name = f"{user_name}_gitlab"
 
-    user = User(id=user_info.sub, username=user_name, type=provider)
-    db.session.add(user)
+    user = User.create_oidc_account(username=user_name, provider=provider, sub=user_info.sub)
     db.session.commit()
 
     login_user(user)
@@ -217,9 +122,9 @@ def authorize_login_oidc(provider):
     print(f"\nToken: {token}\n")
 
     user_info = token['userinfo']
-    user = User.query.filter_by(id=user_info.sub).first()
+    user = User.query.join(User.connected_providers).filter_by(sub=user_info.sub).first()
     if not user:
-        return redirect(url_for("views.welcome"))
+        return redirect(url_for("views.signup"))
 
     login_user(user)
     return redirect(url_for("views.protected"))
@@ -228,4 +133,46 @@ def authorize_login_oidc(provider):
 @blueprint.route("/protected")
 @login_required
 def protected():
-    return render_template("protected.html")
+    
+    return render_template(
+        "protected.html", 
+        connect_providers=current_user.connected_providers.all()
+    )
+
+@blueprint.route("/connect/<provider>")
+@login_required
+def connect_provider(provider):
+    redirect_url = url_for("views.authorize_connect_oidc",
+                           _external=True, provider=provider)
+    client = oauth.create_client(provider)
+
+    if not client:
+        return
+
+    return client.authorize_redirect(redirect_url)
+
+@blueprint.route("/connect/<provider>/authorize")
+@login_required
+def authorize_connect_oidc(provider):
+    client = oauth.create_client(provider)
+    token = client.authorize_access_token()
+
+    print(f"\nToken: {token}\n")
+
+    user_info = token['userinfo']
+    current_user.connect_oidc_provider(provider, user_info.sub)
+    db.session.commit()
+
+    return redirect(url_for("views.protected"))
+
+@blueprint.route("/disconnect/<provider>")
+@login_required
+def disconnect_oidc(provider):
+    client = oauth.create_client(provider)
+    if not client:
+        return redirect(url_for("views.protected"))
+
+    current_user.disconnect_oidc_provider(provider)
+    db.session.commit()
+
+    return redirect(url_for("views.protected"))

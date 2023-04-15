@@ -4,7 +4,7 @@ from app import app
 
 oauth = OAuth(app)
 
-# TODO: Move to config
+# TODO: Check if configuration URLs can be moved into config and are still recognized from Authlib
 CONF_URL_GOOGLE = 'https://accounts.google.com/.well-known/openid-configuration'
 CONF_URL_MICROSOFT = 'https://login.microsoftonline.com/9188040d-6c67-4c5b-b112-36a304b66dad/v2.0/.well-known/openid-configuration'
 CONF_URL_ORCID = 'https://sandbox.orcid.org/.well-known/openid-configuration'
@@ -41,7 +41,3 @@ oauth.register(
         'scope': 'openid email profile'
     }
 )
-
-# TODO: Gitlab?
-# TODO: Twitter?
-# TODO: Github?
