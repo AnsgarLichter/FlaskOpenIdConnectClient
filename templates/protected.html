@@ -8,7 +8,23 @@
 
 <body>
     <h1>Welcome {{ current_user.username }}!</h1>
-    
+
+    <h2>Connected Providers</h2>
+
+    <table>
+        {%for provider in providers%}
+        <tr>
+            <td>{{ provider.name }}</td>
+            <td><Button><a
+                        href="{{provider.url}}">{{provider.text}}</a></Button>
+            </td>
+        </tr>
+        {%endfor%}
+    </table>
+
+    <br />
+    <br />
+
     <button><a href="{{url_for('views.logout')}}">Logout</a></button>
 
     <form action="{{url_for('views.delete_account', user_id=current_user.id)}}" method="post">

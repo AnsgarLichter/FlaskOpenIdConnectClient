@@ -50,9 +50,13 @@ class User(db.Model, UserMixin):
             provider,
             sub
         )
-    
+
     def disconnect_oidc_provider(self, provider):
-        connected_provider = self.connected_providers.filter_by(provider=provider).first()
+        connected_provider = self.connected_providers.filter_by(
+            provider=provider).first()
+        if not connected_provider:
+            return
+
         db.session.delete(connected_provider)
 
 
@@ -64,7 +68,8 @@ class LocalUser(db.Model):
     )
     password = db.Column(db.String(80), nullable=True)
 
-    user = db.relationship("User", back_populates="local_account", passive_deletes=True)
+    user = db.relationship(
+        "User", back_populates="local_account", passive_deletes=True)
 
     @classmethod
     def create(cls, user, password):
@@ -77,7 +82,7 @@ class LocalUser(db.Model):
         return instance
 
 
-class ConnectedOidcProvider(db.Model): #TODO: Add property aud
+class ConnectedOidcProvider(db.Model):  # TODO: Add property aud
     user_id = db.Column(
         db.String(80),
         db.ForeignKey(User.id, ondelete='CASCADE'),
@@ -86,7 +91,8 @@ class ConnectedOidcProvider(db.Model): #TODO: Add property aud
     provider = db.Column(db.String(80), primary_key=True)
     sub = db.Column(db.String(80))
 
-    user = db.relationship("User", back_populates="connected_providers", passive_deletes=True)
+    user = db.relationship(
+        "User", back_populates="connected_providers", passive_deletes=True)
 
     @classmethod
     def create(cls, user, provider, sub):
