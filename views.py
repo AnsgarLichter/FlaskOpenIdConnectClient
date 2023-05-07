@@ -1,4 +1,4 @@
-from flask import render_template, redirect, session, url_for, Blueprint
+from flask import render_template, redirect, url_for, Blueprint, current_app
 
 # Flask Login
 from flask_login import login_required, login_user, logout_user, current_user
@@ -98,16 +98,30 @@ def authorize_signup_oidc(provider):
     if user:
         return redirect(url_for("views.login_oidc", provider=provider))
 
-    user_name = user_info.name
-    if provider == 'microsoft':
-        user_name = user_info['preferred_username']
-    elif provider == 'orcid':
-        user_name = f"{user_info['given_name']}{user_info['family_name']}"
-    elif provider == 'gitlab':  # user_info.name does work but is already used in the test example
-        user_name = f"{user_name}_gitlab"
+    # TODO: Use configuration
+    # TODO: Add possibility to use plugin hooks for edge cases
+    properties_to_map = current_app.config['OIDC_PROVIDER_PROPERTIES_TO_MAP']
+    provider_configuration = current_app.config['OIDC_PROVIDER']
+    corresponding_configuration = next(
+        (configuration for configuration in provider_configuration if configuration['providerName'] == provider), None)
+    mapped_values = {}
+
+    for property in properties_to_map:
+        property_configuration = corresponding_configuration[property]
+        if type(property_configuration) is dict:
+            property_values = []
+            for property_name in property_configuration['fields']:
+                property_values.append(user_info[property_name])
+
+            mapped_value = property_configuration['separator'].join(
+                property_values)
+        else:
+            mapped_value = user_info[property_configuration]
+
+        mapped_values[property] = mapped_value
 
     user = User.create_oidc_account(
-        username=user_name, provider=provider, sub=user_info.sub)
+        user_property_values=mapped_values, provider=user_info['iss'], sub=user_info['sub'])
     db.session.commit()
 
     login_user(user)
@@ -128,10 +142,10 @@ def authorize_login_oidc(provider):
     token = client.authorize_access_token()
 
     print(f"\nToken: {token}\n")
-
     user_info = token['userinfo']
+
     user = User.query.join(User.connected_providers).filter_by(
-        sub=user_info.sub).first()
+        provider=user_info['iss'], sub=user_info['sub']).first()
     if not user:
         return redirect(url_for("views.signup"))
 
@@ -143,23 +157,29 @@ def authorize_login_oidc(provider):
 @login_required
 def protected():
     connected_providers = current_user.connected_providers.all()
-    providers = [{"name": "google"}, {"name": "microsoft"},
-                 {"name": "orcid"}, {"name": "gitlab"}]
+    provider_configuration = current_app.config['OIDC_PROVIDER']
 
-    for provider in providers:
-        if not next((connected_provider for connected_provider in connected_providers if connected_provider.provider == provider["name"]), None):
-            provider['text'] = "Connect"
-            provider['url'] = url_for(
-                'views.connect_provider', provider=provider["name"])
-            continue
+    ui_providers = []
+    for provider in provider_configuration:
+        provider_name = provider["providerName"]
+        ui_provider = {
+            'name': provider_name.capitalize()
+        }
 
-        provider['text'] = "Disonnect"
-        provider['url'] = url_for(
-            'views.disconnect_oidc', provider=provider["name"])
+        if not next((connected_provider for connected_provider in connected_providers if connected_provider.provider == provider_name), None):
+            ui_provider['text'] = "Connect"
+            ui_provider['href'] = url_for(
+                'views.connect_provider', provider=provider_name)
+        else:
+            ui_provider['text'] = "Disonnect"
+            ui_provider['href'] = url_for(
+                'views.disconnect_oidc', provider=provider_name)
+
+        ui_providers.append(ui_provider)
 
     return render_template(
         "protected.html",
-        providers=providers
+        providers=ui_providers
     )
 
 

@@ -4,7 +4,6 @@ from hash import flask_bcrypt
 
 
 class User(db.Model, UserMixin):
-    # TODO: Revert back to auto incremented ID instead of sub from oidc provider
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     username = db.Column(db.String(20), nullable=False, unique=True)
 
@@ -32,8 +31,14 @@ class User(db.Model, UserMixin):
         return instance
 
     @classmethod
-    def create_oidc_account(cls, username, provider, sub):
-        instance = cls(username=username)
+    def create_oidc_account(cls, user_property_values, provider, sub):
+        instance = cls()
+        for key in user_property_values.keys():
+            setattr(instance, key, user_property_values[key])
+
+        if not instance.username:
+            return
+
         db.session.add(instance)
 
         ConnectedOidcProvider.create(
@@ -82,7 +87,7 @@ class LocalUser(db.Model):
         return instance
 
 
-class ConnectedOidcProvider(db.Model):  # TODO: Add property aud
+class ConnectedOidcProvider(db.Model):
     user_id = db.Column(
         db.String(80),
         db.ForeignKey(User.id, ondelete='CASCADE'),
